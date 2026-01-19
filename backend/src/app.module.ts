@@ -20,8 +20,7 @@ import { env } from './lib/env';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const mongoUrl = configService.get<string>('MONGODB_URL') || env.MONGODB_URL;
-        console.log(`Database URI: ${mongoUrl.replace(/\/\/.*@/, '//***:***@')}`); // Hide credentials in logs
-        
+        console.log("Connected to MongoDB")
         return {
           uri: mongoUrl,
           retryWrites: true,
@@ -33,13 +32,13 @@ import { env } from './lib/env';
     ThrottlerModule.forRoot([
       {
         name: 'short',
-        ttl: 60000, // 1 minute
-        limit: 5, // 5 requests per minute for signup/login
+        ttl: 60000,
+        limit: 5,
       },
       {
         name: 'post',
-        ttl: 60000, // 1 minute
-        limit: 3, // 3 requests per minute for posts
+        ttl: 60000,
+        limit: 3,
       },
     ]),
     BullModule.forRootAsync({
@@ -49,29 +48,29 @@ import { env } from './lib/env';
         const port = parseInt(configService.get<string>('REDIS_PORT') || String(env.REDIS_PORT), 10);
         const password = configService.get<string>('REDIS_PASSWORD')?.trim() || env.REDIS_PASSWORD;
         const username = configService.get<string>('REDIS_USERNAME')?.trim() || env.REDIS_USERNAME;
-        
+
         // Build connection object
         const connection: any = {
           host,
           port,
         };
-        
+
         // Add password (required for Redis Cloud)
         if (password) {
           connection.password = password;
         }
-        
+
         // Redis Cloud with ACL requires username even for default user
         // Include username if provided
         const cleanUsername = username?.trim();
         if (cleanUsername) {
           connection.username = cleanUsername;
         }
-        
+
         // Redis Cloud typically requires TLS
         // Uncomment if your Redis Cloud instance requires TLS
         // connection.tls = {};
-        
+
         return { connection };
       },
       inject: [ConfigService],
@@ -88,4 +87,4 @@ import { env } from './lib/env';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

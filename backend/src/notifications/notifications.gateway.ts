@@ -24,12 +24,15 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   constructor(
     private jwtService: JwtService,
     private usersService: UsersService,
-  ) {}
+  ) { }
 
   async handleConnection(client: Socket) {
     try {
+      console.log(`🔌 New connection attempt: ${client.id}`);
       const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.split(' ')[1];
+
       if (!token) {
+        console.warn(`⚠️ No token provided for client ${client.id}`);
         client.disconnect();
         return;
       }
@@ -38,9 +41,9 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
       const userId = payload.sub;
 
       this.userSockets.set(userId, client.id);
-      console.log(`User ${userId} connected with socket ${client.id}`);
+      console.log(`✅ User ${userId} connected with socket ${client.id}`);
     } catch (error) {
-      console.error('WebSocket authentication failed:', error);
+      console.error(`❌ WebSocket authentication failed for client ${client.id}:`, error.message);
       client.disconnect();
     }
   }
@@ -49,19 +52,29 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     for (const [userId, socketId] of this.userSockets.entries()) {
       if (socketId === client.id) {
         this.userSockets.delete(userId);
-        console.log(`User ${userId} disconnected`);
+        console.log(`🔌 User ${userId} disconnected (${client.id})`);
         break;
       }
     }
   }
 
-  async notifyUserFollowed(followedUserId: string, followerUsername: string) {
-    const socketId = this.userSockets.get(followedUserId);
+  async sendNotification(userId: string, type: string, message: string) {
+    const socketId = this.userSockets.get(userId);
+    console.log(`Sending notification to user ${userId} (socket: ${socketId || 'offline'}): [${type}] ${message}`);
+
     if (socketId) {
       this.server.to(socketId).emit('notification', {
-        type: 'follow',
-        message: `User ${followerUsername} followed you`,
+        type,
+        message,
       });
     }
+  }
+
+  async notifyUserFollowed(followedUserId: string, followerUsername: string) {
+    await this.sendNotification(
+      followedUserId,
+      'follow',
+      `User ${followerUsername} followed you`
+    );
   }
 }

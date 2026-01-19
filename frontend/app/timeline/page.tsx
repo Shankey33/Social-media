@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
@@ -49,37 +49,50 @@ export default function TimelinePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const loadCountRef = useRef(0)
 
   const fetchCurrentUser = useCallback(async () => {
     try {
+      console.log('Fetching/refreshing current user data...');
       const response = await api.get('/users/me')
+      console.log('✅ Current user data received:', response.data)
       setCurrentUser(response.data)
+      return response.data
     } catch (error) {
-      console.error('Failed to fetch current user:', error)
+      console.error('❌ Failed to fetch current user:', error)
+      return null
     }
   }, [])
 
   const fetchTimeline = useCallback(async () => {
     try {
+      console.log('Fetching timeline posts...');
       const response = await api.get('/posts/timeline')
+      console.log(`✅ Received ${response.data.length} posts for timeline`)
       setPosts(response.data)
     } catch (error) {
-      console.error('Failed to fetch timeline:', error)
-    } finally {
-      setLoading(false)
+      console.error('❌ Failed to fetch timeline:', error)
     }
   }, [])
 
   const fetchUsers = useCallback(async () => {
     try {
+      console.log('Fetching all users...');
       const response = await api.get('/users')
       console.log(`📊 Received ${response.data.length} total users from API`)
-      console.log('Current user ID:', user?.id)
-      const filtered = response.data.filter((u: User) => u._id !== user?.id)
+
+      const currentUserId = user?.id
+      console.log('Filtering out current user:', currentUserId)
+
+      const filtered = response.data.filter((u: any) => {
+        const uId = u._id || u.id
+        return uId !== currentUserId
+      })
+
       console.log(`📊 After filtering current user: ${filtered.length} users`)
       setUsers(filtered)
     } catch (error) {
-      console.error('Failed to fetch users:', error)
+      console.error('❌ Failed to fetch users:', error)
     }
   }, [user?.id])
 
@@ -115,16 +128,40 @@ export default function TimelinePage() {
       return
     }
 
-    // Reset state when switching accounts
-    setPosts([])
-    setUsers([])
-    setSearchResults([])
-    setCurrentUser(null)
-    setLoading(true)
+    // Prevent double-firing in Strict Mode and redundant re-loads
+    if (loadCountRef.current > 0) {
+      console.log('⏳ Data already loading or loaded for this session');
+      return;
+    }
 
-    fetchCurrentUser()
-    fetchTimeline()
-    fetchUsers()
+    const loadData = async () => {
+      loadCountRef.current += 1;
+      console.log('🔄 Initializing timeline data for user:', user.username)
+      setLoading(true)
+
+      // Reset state
+      setPosts([])
+      setUsers([])
+      setSearchResults([])
+      setCurrentUser(null)
+
+      try {
+        // Fetch everything in parallel
+        await Promise.all([
+          fetchCurrentUser(),
+          fetchTimeline(),
+          fetchUsers()
+        ])
+      } catch (error) {
+        console.error('❌ Error during initial data load:', error)
+        loadCountRef.current = 0; // Allow retry on failure
+      } finally {
+        setLoading(false)
+        console.log('🏁 Data loading complete')
+      }
+    }
+
+    loadData()
   }, [user?.id, router, fetchCurrentUser, fetchTimeline, fetchUsers])
 
   // Refresh timeline when page becomes visible (e.g., when navigating back)
@@ -248,13 +285,13 @@ export default function TimelinePage() {
     if (!currentUser) return 'none'
     const userIdStr = userId.toString()
 
-    if (currentUser.friends?.some(id => id.toString() === userIdStr)) {
+    if (currentUser.friends?.some((id: any) => id.toString() === userIdStr)) {
       return 'friend'
     }
-    if (currentUser.sentFriendRequests?.some(id => id.toString() === userIdStr)) {
+    if (currentUser.sentFriendRequests?.some((id: any) => id.toString() === userIdStr)) {
       return 'sent'
     }
-    if (currentUser.receivedFriendRequests?.some(id => id.toString() === userIdStr)) {
+    if (currentUser.receivedFriendRequests?.some((id: any) => id.toString() === userIdStr)) {
       return 'received'
     }
     return 'none'
@@ -358,7 +395,7 @@ export default function TimelinePage() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <h3 className="text-lg font-semibold">{post.title}</h3>
-                        <p className="text-sm text-gray-500">by {post.author.username}</p>
+                        <p className="text-sm text-gray-500">by {post.author?.username || 'Unknown'}</p>
                       </div>
                       <span className="text-xs text-gray-400">
                         {new Date(post.createdAt).toLocaleDateString()}
@@ -426,7 +463,7 @@ export default function TimelinePage() {
                 <div className="bg-white rounded-lg shadow">
                   <div className="p-4 space-y-3">
                     {users
-                      .filter((u) => currentUser.receivedFriendRequests?.some(id => id.toString() === u._id))
+                      .filter((u) => currentUser.receivedFriendRequests?.some((id: any) => id.toString() === u._id))
                       .map((u) => (
                         <div key={u._id} className="flex items-center justify-between py-2 border-b last:border-b-0">
                           <div>

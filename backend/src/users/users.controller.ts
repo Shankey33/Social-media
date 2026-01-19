@@ -71,7 +71,11 @@ export class UsersController {
     // Send WebSocket notification
     const requester = await this.usersService.findById(req.user.userId);
     if (requester) {
-      await this.notificationsGateway.notifyUserFollowed(targetUserId, `${requester.username} sent you a friend request`);
+      await this.notificationsGateway.sendNotification(
+        targetUserId,
+        'friend-request',
+        `${requester.username} sent you a friend request`
+      );
     }
 
     return { message: 'Friend request sent successfully' };
@@ -84,7 +88,11 @@ export class UsersController {
     // Send WebSocket notification
     const accepter = await this.usersService.findById(req.user.userId);
     if (accepter) {
-      await this.notificationsGateway.notifyUserFollowed(senderUserId, `${accepter.username} accepted your friend request`);
+      await this.notificationsGateway.sendNotification(
+        senderUserId,
+        'friend-accept',
+        `${accepter.username} accepted your friend request`
+      );
     }
 
     return { message: 'Friend request accepted successfully' };
